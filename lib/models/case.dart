@@ -30,6 +30,11 @@ class FridgeCase {
   final List<Vote> votes;
   final String? sentence;
 
+  /// This device's own vote on the case, if any. Until there are real
+  /// per-housemate accounts, "one vote per user" means "one vote per
+  /// device" — swap this for a per-user lookup once Auth is wired in.
+  final Vote? myVote;
+
   const FridgeCase({
     required this.id,
     required this.crimeTitle,
@@ -39,7 +44,10 @@ class FridgeCase {
     required this.status,
     this.votes = const [],
     this.sentence,
+    this.myVote,
   });
+
+  bool get hasVoted => myVote != null;
 
   int get guiltyVotes => votes.where((v) => v == Vote.guilty).length;
   int get notGuiltyVotes => votes.where((v) => v == Vote.notGuilty).length;
@@ -48,6 +56,7 @@ class FridgeCase {
     CaseStatus? status,
     List<Vote>? votes,
     String? sentence,
+    Vote? myVote,
   }) {
     return FridgeCase(
       id: id,
@@ -58,6 +67,7 @@ class FridgeCase {
       status: status ?? this.status,
       votes: votes ?? this.votes,
       sentence: sentence ?? this.sentence,
+      myVote: myVote ?? this.myVote,
     );
   }
 }

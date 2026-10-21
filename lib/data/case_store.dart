@@ -21,16 +21,22 @@ class CaseStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void castVote(String id, Vote vote) {
+  /// Casts a vote. Returns false (and changes nothing) if this device
+  /// already voted on the case.
+  bool castVote(String id, Vote vote) {
     final index = _cases.indexWhere((c) => c.id == id);
-    if (index == -1) return;
+    if (index == -1) return false;
     final current = _cases[index];
+    if (current.hasVoted) return false;
+
     final updatedVotes = [...current.votes, vote];
     _cases[index] = current.copyWith(
       votes: updatedVotes,
+      myVote: vote,
       status: CaseStatus.onTrial,
     );
     notifyListeners();
+    return true;
   }
 
   void closeCase(String id, {required bool guilty, String? sentence}) {

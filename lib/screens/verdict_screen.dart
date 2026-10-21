@@ -27,7 +27,13 @@ class _VerdictScreenState extends State<VerdictScreen> {
   }
 
   void _vote(Vote vote) {
-    widget.store.castVote(widget.caseId, vote);
+    final accepted = widget.store.castVote(widget.caseId, vote);
+    if (!accepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You already voted on this case.')),
+      );
+      return;
+    }
     setState(() {});
   }
 
@@ -179,25 +185,44 @@ class _VerdictScreenState extends State<VerdictScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: VerdictButton(
-                    kind: VerdictButtonKind.notGuilty,
-                    label: 'Vote Not Guilty',
-                    onPressed: () => _vote(Vote.notGuilty),
+            if (fridgeCase.hasVoted) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBorder,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'You voted: ${fridgeCase.myVote == Vote.guilty ? 'Guilty' : 'Not Guilty'}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: VerdictButton(
-                    kind: VerdictButtonKind.guilty,
-                    label: 'Vote Guilty',
-                    onPressed: () => _vote(Vote.guilty),
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: VerdictButton(
+                      kind: VerdictButtonKind.notGuilty,
+                      label: 'Vote Not Guilty',
+                      onPressed: () => _vote(Vote.notGuilty),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: VerdictButton(
+                      kind: VerdictButtonKind.guilty,
+                      label: 'Vote Guilty',
+                      onPressed: () => _vote(Vote.guilty),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 24),
             const Divider(color: AppColors.cardBorder),
             const SizedBox(height: 12),

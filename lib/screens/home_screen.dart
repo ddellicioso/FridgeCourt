@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../data/case_store.dart';
+import '../services/household_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/case_card.dart';
+import 'housecode_screen.dart';
 import 'report_screen.dart';
 import 'verdict_screen.dart';
 
@@ -10,10 +12,50 @@ class HomeScreen extends StatelessWidget {
 
   const HomeScreen({super.key, required this.store});
 
+  Future<void> _leaveHousehold(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Leave this household?'),
+        content: const Text(
+          "This just forgets the household on this device — it doesn't "
+          'delete anything. You can rejoin with the code any time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await HouseholdService.instance.forgetMembership();
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HousecodeScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Fridge Court')),
+      appBar: AppBar(
+        title: Text('Fridge Court · ${store.householdCode}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Leave household',
+            onPressed: () => _leaveHousehold(context),
+          ),
+        ],
+      ),
       body: AnimatedBuilder(
         animation: store,
         builder: (context, _) {

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "419366070543",
+    "project_id": "fridge-court",
+    "storage_bucket": "fridge-court.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:419366070543:android:91402fedb6dc58be09367a",
+        "android_client_info": {
+          "package_name": "com.example.fridge_court"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNQeqCA8GaA-pjTiISpS1Mcxs4rKhYc88"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

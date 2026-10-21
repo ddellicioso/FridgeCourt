@@ -1,81 +1,87 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/case.dart';
+import '../services/auth_service.dart';
 
-/// In-memory store standing in for Firestore for now.
-/// Swap the body of these methods for Firestore calls once the
-/// Must-have UI flow is confirmed — the screens only depend on this
-/// class, not on how the data is stored.
+/// Firestore-backed store, scoped to one household. Cases live at
+/// households/{householdCode}/cases/{caseId} and update in real time for
+/// everyone in that household — this is what makes voting/case status
+/// actually shared across housemates' devices.
 class CaseStore extends ChangeNotifier {
-  CaseStore() {
-    _cases.addAll(_seed());
+  CaseStore({required this.householdCode, required this.displayName}) {
+    _subscription = _casesRef
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen(_onSnapshot, onError: (e) => debugPrint('CaseStore error: $e'));
   }
 
-  final List<FridgeCase> _cases = [];
+  final String householdCode;
+  final String displayName;
+
+  List<FridgeCase> _cases = [];
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
 
   List<FridgeCase> get cases => List.unmodifiable(_cases);
 
-  FridgeCase byId(String id) => _cases.firstWhere((c) => c.id == id);
+  String get myUid => AuthService.instance.currentUid;
 
-  void addCase(FridgeCase newCase) {
-    _cases.insert(0, newCase);
+  CollectionReference<Map<String, dynamic>> get _casesRef => FirebaseFirestore
+      .instance
+      .collection('households')
+      .doc(householdCode)
+      .collection('cases');
+
+  void _onSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    _cases = snapshot.docs
+        .map((doc) => FridgeCase.fromMap(doc.id, doc.data()))
+        .toList();
     notifyListeners();
   }
 
-  /// Casts a vote. Returns false (and changes nothing) if this device
-  /// already voted on the case.
-  bool castVote(String id, Vote vote) {
-    final index = _cases.indexWhere((c) => c.id == id);
-    if (index == -1) return false;
-    final current = _cases[index];
-    if (current.hasVoted) return false;
+  FridgeCase byId(String id) => _cases.firstWhere((c) => c.id == id);
 
-    final updatedVotes = [...current.votes, vote];
-    _cases[index] = current.copyWith(
-      votes: updatedVotes,
-      myVote: vote,
-      status: CaseStatus.onTrial,
-    );
-    notifyListeners();
+  Future<void> addCase({
+    required String crimeTitle,
+    required String accused,
+    required String evidenceNote,
+  }) async {
+    await _casesRef.add({
+      'crimeTitle': crimeTitle,
+      'accused': accused,
+      'reporter': displayName,
+      'evidenceNote': evidenceNote,
+      'status': CaseStatus.pending.name,
+      'votesByUid': <String, String>{},
+      'sentence': null,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Casts a vote. Returns false (and writes nothing) if this uid already
+  /// voted on the case — checked against the latest local snapshot, and
+  /// also enforced by Firestore security rules server-side.
+  Future<bool> castVote(String id, Vote vote) async {
+    final current = byId(id);
+    if (current.hasVoted(myUid)) return false;
+
+    await _casesRef.doc(id).update({
+      'votesByUid.$myUid': vote.name,
+      'status': CaseStatus.onTrial.name,
+    });
     return true;
   }
 
-  void closeCase(String id, {required bool guilty, String? sentence}) {
-    final index = _cases.indexWhere((c) => c.id == id);
-    if (index == -1) return;
-    final current = _cases[index];
-    _cases[index] = current.copyWith(
-      status: guilty ? CaseStatus.guilty : CaseStatus.notGuilty,
-      sentence: sentence,
-    );
-    notifyListeners();
+  Future<void> closeCase(String id, {required bool guilty, String? sentence}) async {
+    await _casesRef.doc(id).update({
+      'status': (guilty ? CaseStatus.guilty : CaseStatus.notGuilty).name,
+      'sentence': sentence,
+    });
   }
 
-  List<FridgeCase> _seed() => [
-        const FridgeCase(
-          id: 'c1',
-          crimeTitle: 'Theft of the last dumpling',
-          accused: 'Sam',
-          reporter: 'Jordan',
-          evidenceNote: 'Fridge cam caught him mid-bite at 1am.',
-          status: CaseStatus.onTrial,
-          votes: [Vote.guilty, Vote.guilty, Vote.notGuilty],
-        ),
-        const FridgeCase(
-          id: 'c2',
-          crimeTitle: 'Abandoned dishes, 3 days running',
-          accused: 'Priya',
-          reporter: 'Sam',
-          evidenceNote: 'Photo attached, smell reported by two witnesses.',
-          status: CaseStatus.pending,
-        ),
-        const FridgeCase(
-          id: 'c3',
-          crimeTitle: 'Unauthorized use of the good mug',
-          accused: 'Jordan',
-          reporter: 'Priya',
-          evidenceNote: 'Mug found in his room. No alibi offered.',
-          status: CaseStatus.guilty,
-          sentence: 'Must wash all mugs for one week.',
-        ),
-      ];
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 }

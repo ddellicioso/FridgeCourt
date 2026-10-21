@@ -14,12 +14,29 @@ extension CaseStatusLabel on CaseStatus {
         return 'Not Guilty';
     }
   }
+
+  static CaseStatus fromName(String name) {
+    return CaseStatus.values.firstWhere(
+      (s) => s.name == name,
+      orElse: () => CaseStatus.pending,
+    );
+  }
 }
 
 /// A single vote cast by a juror.
 enum Vote { guilty, notGuilty }
 
+extension VoteName on Vote {
+  static Vote fromName(String name) {
+    return Vote.values.firstWhere((v) => v.name == name);
+  }
+}
+
 /// A filed "crime" case.
+///
+/// Votes are keyed by Firebase Auth uid (`votesByUid`), not just counted,
+/// so "one vote per person" holds across real devices — a person voting
+/// from a new phone is still the same uid, not a fresh vote slot.
 class FridgeCase {
   final String id;
   final String crimeTitle;
@@ -27,13 +44,8 @@ class FridgeCase {
   final String reporter;
   final String evidenceNote;
   final CaseStatus status;
-  final List<Vote> votes;
+  final Map<String, Vote> votesByUid;
   final String? sentence;
-
-  /// This device's own vote on the case, if any. Until there are real
-  /// per-housemate accounts, "one vote per user" means "one vote per
-  /// device" — swap this for a per-user lookup once Auth is wired in.
-  final Vote? myVote;
 
   const FridgeCase({
     required this.id,
@@ -42,21 +54,22 @@ class FridgeCase {
     required this.reporter,
     required this.evidenceNote,
     required this.status,
-    this.votes = const [],
+    this.votesByUid = const {},
     this.sentence,
-    this.myVote,
   });
 
-  bool get hasVoted => myVote != null;
+  int get guiltyVotes =>
+      votesByUid.values.where((v) => v == Vote.guilty).length;
+  int get notGuiltyVotes =>
+      votesByUid.values.where((v) => v == Vote.notGuilty).length;
 
-  int get guiltyVotes => votes.where((v) => v == Vote.guilty).length;
-  int get notGuiltyVotes => votes.where((v) => v == Vote.notGuilty).length;
+  Vote? voteOf(String uid) => votesByUid[uid];
+  bool hasVoted(String uid) => votesByUid.containsKey(uid);
 
   FridgeCase copyWith({
     CaseStatus? status,
-    List<Vote>? votes,
+    Map<String, Vote>? votesByUid,
     String? sentence,
-    Vote? myVote,
   }) {
     return FridgeCase(
       id: id,
@@ -65,9 +78,36 @@ class FridgeCase {
       reporter: reporter,
       evidenceNote: evidenceNote,
       status: status ?? this.status,
-      votes: votes ?? this.votes,
+      votesByUid: votesByUid ?? this.votesByUid,
       sentence: sentence ?? this.sentence,
-      myVote: myVote ?? this.myVote,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'crimeTitle': crimeTitle,
+      'accused': accused,
+      'reporter': reporter,
+      'evidenceNote': evidenceNote,
+      'status': status.name,
+      'votesByUid': votesByUid.map((uid, vote) => MapEntry(uid, vote.name)),
+      'sentence': sentence,
+    };
+  }
+
+  factory FridgeCase.fromMap(String id, Map<String, dynamic> map) {
+    final rawVotes = (map['votesByUid'] as Map?) ?? {};
+    return FridgeCase(
+      id: id,
+      crimeTitle: map['crimeTitle'] as String? ?? '',
+      accused: map['accused'] as String? ?? '',
+      reporter: map['reporter'] as String? ?? '',
+      evidenceNote: map['evidenceNote'] as String? ?? '',
+      status: CaseStatusLabel.fromName(map['status'] as String? ?? 'pending'),
+      votesByUid: rawVotes.map(
+        (uid, vote) => MapEntry(uid as String, VoteName.fromName(vote as String)),
+      ),
+      sentence: map['sentence'] as String?,
     );
   }
 }

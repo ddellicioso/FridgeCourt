@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../data/case_store.dart';
-import '../models/case.dart';
 import '../theme/app_colors.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -17,6 +16,7 @@ class _ReportScreenState extends State<ReportScreen> {
   final _crimeController = TextEditingController();
   final _accusedController = TextEditingController();
   final _evidenceController = TextEditingController();
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -26,23 +26,29 @@ class _ReportScreenState extends State<ReportScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final newCase = FridgeCase(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      crimeTitle: _crimeController.text.trim(),
-      accused: _accusedController.text.trim(),
-      reporter: 'You', // TODO: replace with signed-in user once Auth is wired in
-      evidenceNote: _evidenceController.text.trim(),
-      status: CaseStatus.pending,
-    );
-
-    widget.store.addCase(newCase);
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Case filed. The jury has been summoned.')),
-    );
+    setState(() => _submitting = true);
+    try {
+      await widget.store.addCase(
+        crimeTitle: _crimeController.text.trim(),
+        accused: _accusedController.text.trim(),
+        evidenceNote: _evidenceController.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Case filed. The jury has been summoned.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not file the case: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -105,7 +111,7 @@ class _ReportScreenState extends State<ReportScreen> {
             SizedBox(
               height: 52,
               child: ElevatedButton(
-                onPressed: _submit,
+                onPressed: _submitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.quoteAccent,
                   foregroundColor: Colors.white,
@@ -113,10 +119,19 @@ class _ReportScreenState extends State<ReportScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text(
-                  'Submit to the Court',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
+                child: _submitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Submit to the Court',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
               ),
             ),
           ],

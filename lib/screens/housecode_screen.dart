@@ -1,5 +1,7 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/case_store.dart';
+import '../demo_mode.dart';
 import '../services/household_service.dart';
 import '../theme/app_colors.dart';
 import 'home_screen.dart';
@@ -21,9 +23,13 @@ class _HousecodeScreenState extends State<HousecodeScreen> {
   bool _loading = false;
   String? _error;
 
-  final _nameController = TextEditingController();
-  final _houseNameController = TextEditingController();
-  final _codeController = TextEditingController();
+  // Prefilled so the demo recording doesn't need any typing here — change
+  // these if you want, just keep _seedDemoCases() in case_store.dart's
+  // accused name lined up with whatever name you use when recording.
+  final _nameController = TextEditingController(text: kDemoMode ? 'Maya' : '');
+  final _houseNameController =
+      TextEditingController(text: kDemoMode ? 'The Loft' : '');
+  final _codeController = TextEditingController(text: kDemoMode ? 'DEMO42' : '');
 
   @override
   void dispose() {
@@ -34,13 +40,18 @@ class _HousecodeScreenState extends State<HousecodeScreen> {
   }
 
   void _enterApp(String householdCode, String displayName) {
-    final store = CaseStore(
-      householdCode: householdCode,
-      displayName: displayName,
-    );
+    final store = kDemoMode
+        ? CaseStore.demo(householdCode: householdCode, displayName: displayName)
+        : CaseStore(householdCode: householdCode, displayName: displayName);
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => HomeScreen(store: store)),
     );
+  }
+
+  String _generateDemoCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = Random();
+    return List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
   Future<void> _create() async {
@@ -54,10 +65,12 @@ class _HousecodeScreenState extends State<HousecodeScreen> {
       _error = null;
     });
     try {
-      final code = await HouseholdService.instance.createHousehold(
-        houseName: _houseNameController.text.trim(),
-        displayName: _nameController.text.trim(),
-      );
+      final code = kDemoMode
+          ? _generateDemoCode()
+          : await HouseholdService.instance.createHousehold(
+              houseName: _houseNameController.text.trim(),
+              displayName: _nameController.text.trim(),
+            );
       if (!mounted) return;
       await _showCodeDialog(code);
       if (!mounted) return;
@@ -81,10 +94,12 @@ class _HousecodeScreenState extends State<HousecodeScreen> {
     });
     try {
       final code = _codeController.text.trim().toUpperCase();
-      await HouseholdService.instance.joinHousehold(
-        code: code,
-        displayName: _nameController.text.trim(),
-      );
+      if (!kDemoMode) {
+        await HouseholdService.instance.joinHousehold(
+          code: code,
+          displayName: _nameController.text.trim(),
+        );
+      }
       if (!mounted) return;
       _enterApp(code, _nameController.text.trim());
     } catch (e) {

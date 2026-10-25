@@ -72,7 +72,8 @@ class HouseholdService {
     throw Exception('Could not generate a unique household code, try again.');
   }
 
-  /// Joins an existing household by code. Throws if the code doesn't exist.
+  /// Joins an existing household by code. Throws if the code doesn't exist,
+  /// or if the nickname is already taken by someone else in it.
   Future<void> joinHousehold({
     required String code,
     required String displayName,
@@ -87,7 +88,52 @@ class HouseholdService {
       throw Exception('No household found with that code.');
     }
 
+    _assertNicknameFree(snapshot, displayName, excludingUid: uid);
+
     await doc.update({'members.$uid': displayName});
     await _saveMembership(normalizedCode, displayName);
+  }
+
+  /// All current member nicknames in a household, for pickers (e.g. "who
+  /// did it?" on the report screen).
+  Future<List<String>> getMemberNames(String code) async {
+    final doc = await _households.doc(code).get();
+    final members = (doc.data()?['members'] as Map?) ?? {};
+    return members.values.map((v) => v.toString()).toList();
+  }
+
+  /// Changes this device's nickname in the household, rejecting it if
+  /// another member already has that name (case-insensitive).
+  Future<void> updateNickname({
+    required String code,
+    required String newName,
+  }) async {
+    await AuthService.instance.ensureSignedIn();
+    final uid = AuthService.instance.currentUid;
+    final doc = _households.doc(code);
+    final snapshot = await doc.get();
+    if (!snapshot.exists) {
+      throw Exception('Household not found.');
+    }
+
+    _assertNicknameFree(snapshot, newName, excludingUid: uid);
+
+    await doc.update({'members.$uid': newName.trim()});
+    await _saveMembership(code, newName.trim());
+  }
+
+  void _assertNicknameFree(
+    DocumentSnapshot<Map<String, dynamic>> snapshot,
+    String name, {
+    required String excludingUid,
+  }) {
+    final members = (snapshot.data()?['members'] as Map?) ?? {};
+    final normalized = name.trim().toLowerCase();
+    final taken = members.entries.any((e) =>
+        e.key != excludingUid &&
+        (e.value as String).trim().toLowerCase() == normalized);
+    if (taken) {
+      throw Exception('That nickname is already taken in this household.');
+    }
   }
 }

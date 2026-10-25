@@ -3,6 +3,7 @@ import '../data/case_store.dart';
 import '../services/household_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/case_card.dart';
+import '../widgets/notification_bell.dart';
 import 'housecode_screen.dart';
 import 'report_screen.dart';
 import 'verdict_screen.dart';
@@ -11,6 +12,38 @@ class HomeScreen extends StatelessWidget {
   final CaseStore store;
 
   const HomeScreen({super.key, required this.store});
+
+  Future<void> _editNickname(BuildContext context) async {
+    final controller = TextEditingController(text: store.displayName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit your nickname'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Courtroom nickname'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newName == null || !context.mounted) return;
+
+    final error = await store.renameSelf(newName);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error ?? 'Nickname updated.')),
+    );
+  }
 
   Future<void> _leaveHousehold(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -49,6 +82,12 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('Fridge Court · ${store.householdCode}'),
         actions: [
+          NotificationBell(store: store),
+          IconButton(
+            icon: const Icon(Icons.badge_outlined),
+            tooltip: 'Edit nickname',
+            onPressed: () => _editNickname(context),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Leave household',
@@ -74,8 +113,23 @@ class HomeScreen extends StatelessWidget {
             itemCount: cases.length,
             itemBuilder: (context, index) {
               final c = cases[index];
+              final awaitingMyPlea =
+                  store.casesAwaitingMyPlea.any((x) => x.id == c.id);
+              final needsMyVote =
+                  store.casesNeedingMyVote.any((x) => x.id == c.id);
+              final iAmAccused =
+                  store.casesWhereIAmAccused.any((x) => x.id == c.id);
+              final needsAttention = awaitingMyPlea || needsMyVote || iAmAccused;
+              final reason = awaitingMyPlea
+                  ? 'Enter your plea'
+                  : (needsMyVote
+                      ? 'Your vote is needed'
+                      : (iAmAccused ? "You're accused — on trial" : null));
+
               return CaseCard(
                 fridgeCase: c,
+                needsMyAttention: needsAttention,
+                attentionReason: reason,
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => VerdictScreen(store: store, caseId: c.id),

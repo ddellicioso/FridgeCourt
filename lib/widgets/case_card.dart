@@ -7,7 +7,19 @@ class CaseCard extends StatelessWidget {
   final FridgeCase fridgeCase;
   final VoidCallback onTap;
 
-  const CaseCard({super.key, required this.fridgeCase, required this.onTap});
+  /// Whether this card should show a "needs your attention" tag — passed
+  /// in by the caller, which already knows the current person's uid and
+  /// display name (CaseStore.pendingForMe).
+  final bool needsMyAttention;
+  final String? attentionReason;
+
+  const CaseCard({
+    super.key,
+    required this.fridgeCase,
+    required this.onTap,
+    this.needsMyAttention = false,
+    this.attentionReason,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +56,15 @@ class CaseCard extends StatelessWidget {
                   fontSize: 12.5,
                 ),
               ),
+              const SizedBox(height: 2),
+              Text(
+                '${fridgeCase.severity.label} severity',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               if (fridgeCase.status == CaseStatus.onTrial) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -52,6 +73,25 @@ class CaseCard extends StatelessWidget {
                     color: AppColors.quoteAccent,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              if (needsMyAttention) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.guilty.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    attentionReason ?? 'Needs your attention',
+                    style: const TextStyle(
+                      color: AppColors.guilty,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],

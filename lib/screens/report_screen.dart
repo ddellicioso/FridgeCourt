@@ -7,7 +7,11 @@ import '../theme/app_colors.dart';
 /// Filing a crime is: pick who did it (1 tap), pick the crime from the
 /// menu (1 tap) — that second tap files the case immediately. An
 /// optional evidence note can be typed first, but nothing requires it,
-/// so filing a report never needs more than 2 taps.
+/// so filing a report from the menu never needs more than 2 taps.
+///
+/// If nothing on the menu fits, "Something else?" lets you type a
+/// custom description and pick its severity yourself, then file it the
+/// same way (same CrimeDef shape, just not one of the preset ones).
 class ReportScreen extends StatefulWidget {
   final CaseStore store;
 
@@ -19,18 +23,38 @@ class ReportScreen extends StatefulWidget {
 
 class _ReportScreenState extends State<ReportScreen> {
   final _evidenceController = TextEditingController();
+  final _customTitleController = TextEditingController();
   String? _selectedAccused;
+  Severity? _customSeverity;
   bool _submitting = false;
 
   @override
   void dispose() {
     _evidenceController.dispose();
+    _customTitleController.dispose();
     super.dispose();
   }
 
   List<String> get _accusable => widget.store.householdMembers
       .where((m) => m.toLowerCase() != widget.store.displayName.toLowerCase())
       .toList();
+
+  Future<void> _fileCustomCase() async {
+    final title = _customTitleController.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Describe what they did first.')),
+      );
+      return;
+    }
+    if (_customSeverity == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick how serious it was.')),
+      );
+      return;
+    }
+    await _fileCase(CrimeDef(title, _customSeverity!));
+  }
 
   Future<void> _fileCase(CrimeDef crime) async {
     if (_selectedAccused == null) {
@@ -65,10 +89,14 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('File a Crime')),
-      body: AbsorbPointer(
-        absorbing: _submitting,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      // SafeArea keeps the bottom button clear of the system nav bar
+      // (gesture pill or back/home/recents buttons) — without it, the
+      // last item in a scrolling list can end up sitting underneath it.
+      body: SafeArea(
+        child: AbsorbPointer(
+          absorbing: _submitting,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             const Text(
               '1. Who did it?',
@@ -147,11 +175,66 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
               ),
             ],
+            const SizedBox(height: 22),
+            const Text(
+              'Something else?',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "Not on the menu? Describe it and pick how serious it was.",
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _customTitleController,
+              decoration: const InputDecoration(
+                hintText: 'e.g. "Drank straight from the carton"',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: Severity.values.map((s) {
+                final selected = _customSeverity == s;
+                return ChoiceChip(
+                  label: Text(s.label),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _customSeverity = s),
+                  selectedColor: AppColors.quoteAccent,
+                  labelStyle: TextStyle(
+                    color: selected ? Colors.white : AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: AppColors.cardBorder),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.quoteAccent,
+                ),
+                onPressed: _submitting ? null : _fileCustomCase,
+                icon: const Icon(Icons.gavel, size: 18),
+                label: const Text('File this crime'),
+              ),
+            ),
             if (_submitting) ...[
               const SizedBox(height: 16),
               const Center(child: CircularProgressIndicator()),
             ],
           ],
+          ),
         ),
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'data/case_store.dart';
+import 'demo_mode.dart';
 import 'screens/home_screen.dart';
 import 'screens/housecode_screen.dart';
 import 'services/auth_service.dart';
@@ -10,8 +11,10 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await AuthService.instance.ensureSignedIn();
+  if (!kDemoMode) {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await AuthService.instance.ensureSignedIn();
+  }
   runApp(const FridgeCourtApp());
 }
 
@@ -31,6 +34,10 @@ class FridgeCourtApp extends StatelessWidget {
 
 /// Decides, once per app start, whether this device already belongs to a
 /// household (saved locally) or needs to go through the housecode screen.
+///
+/// In demo mode this always starts at the housecode screen (no saved
+/// membership to check, nothing to look up) so the video can show that
+/// screen too.
 class _StartupGate extends StatefulWidget {
   const _StartupGate();
 
@@ -41,6 +48,10 @@ class _StartupGate extends StatefulWidget {
 class _StartupGateState extends State<_StartupGate> {
   @override
   Widget build(BuildContext context) {
+    if (kDemoMode) {
+      return const HousecodeScreen();
+    }
+
     return FutureBuilder(
       future: HouseholdService.instance.getSavedMembership(),
       builder: (context, snapshot) {
